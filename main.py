@@ -12,18 +12,17 @@ bot = telebot.TeleBot(TOKEN)
 # 📢 Majburiy yopiq kanallarning ID lari:
 CHANNELS = [-1004393253930, -1003774304125, -1003500723640]
 
-# 🔗 Har bir kanal uchun alohida va doimiy taklif havolalari (Invite links):
+# 🔗 Siz tashlagan rasmlardagi asosiy taklif havolalari:
 CHANNEL_LINKS = {
-    -1004393253930: "https://t.me/+Sizning1KanalHavolangiz", # 1-kanal havolasini shu yerga yozing
-    -1003774304125: "https://t.me/+Sizning2KanalHavolangiz", # 2-kanal havolasini shu yerga yozing
-    -1003500723640: "https://t.me/+Sizning3KanalHavolangiz"  # 3-kanal havolasini shu yerga yozing
+    -1004393253930: "https://t.me/+DaUUTS6ysNEWnJUy", 
+    -1003774304125: "https://t.me/+Z206wKfq2kYzODgy", 
+    -1003500723640: "https://t.me/+z5zASH4CbaczOTQy"  
 }
 
 # Bazalar
-user_db = {}   # {user_id: {'lang': 'uz', 'vip_expire': 0, 'blocked': False, 'step': None}}
-movies_db = {} # {code: {'file_id': '...', 'type': 'normal' or 'vip'}}
+user_db = {}   
+movies_db = {} 
 
-# VIP Tariflar va Narxlar (Til bo'yicha)
 VIP_TARIFFS = {
     'uz': {
         '1': ("1 oy — 15,000 so'м", 30 * 86400),
@@ -134,7 +133,6 @@ def start_cmd(message):
 
     if not check_subscription(user_id):
         markup = types.InlineKeyboardMarkup(row_width=1)
-        # Har bir kanal uchun o'zining havolasini chiqarish
         for i, ch in enumerate(CHANNELS, 1):
             link = CHANNEL_LINKS.get(ch, "https://t.me/")
             markup.add(types.InlineKeyboardButton(f"{i}-Kanalga obuna bo'lish", url=link))
@@ -379,4 +377,4 @@ keep_alive()
 
 if __name__ == '__main__':
     bot.infinity_polling()
-                                  
+            
