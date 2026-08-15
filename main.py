@@ -108,24 +108,26 @@ def start_cmd(message):
     lang = get_lang(user_id)
     bot.send_message(message.chat.id, translations[lang]['sub_success'], reply_markup=get_main_menu(user_id))
 
-@bot.callback_query_handler(func=lambda call: call.data == "buy_vip_menu" or call.data.startswith("vip_lang_"))
-def vip_menu_handler(call):
-    user_id = call.from_user.id
+# VIP Menuni ochish funksiyasi (Ham buyruq, ham matn, ham inline uchun umumiy)
+def send_vip_menu(chat_id, user_id, message_id=None, is_edit=False):
     lang = get_lang(user_id)
-    
     markup = types.InlineKeyboardMarkup(row_width=1)
     tariffs = VIP_TARIFFS[lang]
     for key, data in tariffs.items():
         markup.add(types.InlineKeyboardButton(data[0], callback_data=f"select_tariff_{key}"))
     
-    text = f"💎 **VIP Obuna Bo'limi**\nTarifni tanlang:"
-    if call.data == "buy_vip_menu":
-        bot.send_message(call.message.chat.id, text, reply_markup=markup, parse_mode="Markdown")
-    else:
+    text = "💎 **VIP Obuna Bo'limi**\nTarifni tanlang:"
+    if is_edit and message_id:
         try:
-            bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode="Markdown")
+            bot.edit_message_text(text, chat_id, message_id, reply_markup=markup, parse_mode="Markdown")
+            return
         except Exception:
-            bot.send_message(call.message.chat.id, text, reply_markup=markup, parse_mode="Markdown")
+            pass
+    bot.send_message(chat_id, text, reply_markup=markup, parse_mode="Markdown")
+
+@bot.callback_query_handler(func=lambda call: call.data == "buy_vip_menu" or call.data.startswith("vip_lang_"))
+def vip_menu_callback(call):
+    send_vip_menu(call.message.chat.id, call.from_user.id, call.message.message_id, is_edit=True)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("select_tariff_"))
 def select_tariff_callback(call):
@@ -222,8 +224,9 @@ def text_router(message):
         bot.reply_to(message, f"✅ VIP kino qo'shildi. Kodi: `{code}`", parse_mode="Markdown")
         return
 
-    if text == t['vip']:
-        vip_menu_handler(message)
+    # VIP Obuna tugmasi bosilganda menyuni ochish (Barcha tillardagilarni qamrab oladi)
+    if text == t['vip'] or text in ["💎 VIP Obuna", "💎 VIP Подписка", "💎 VIP Subscription"]:
+        send_vip_menu(message.chat.id, user_id)
         return
 
     if text == t['lang']:
