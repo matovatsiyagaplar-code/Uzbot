@@ -16,9 +16,9 @@ movies_db = {} # {code: {'file_id': '...', 'type': 'normal' or 'vip'}}
 # VIP Tariflar va Narxlar (Til bo'yicha)
 VIP_TARIFFS = {
     'uz': {
-        '1': ("1 oy — 15,000 so'м", 30 * 86400),
-        '3': ("3 oy — 20,000 so'м", 90 * 86400),
-        '6': ("6 oy — 35,000 so'м", 180 * 86400),
+        '1': ("1 oy — 15,000 so'm", 30 * 86400),
+        '3': ("3 oy — 20,000 so'm", 90 * 86400),
+        '6': ("6 oy — 35,000 so'm", 180 * 86400),
     },
     'ru': {
         '1': ("1 месяц — 200 руб", 30 * 86400),
@@ -40,7 +40,21 @@ translations = {
         'recommend': "💡 Kino tavsiya qilish",
         'upload': "📤 Shaxsiy kino qo'shish",
         'vip': "💎 VIP Obuna",
-        'lang': "🌐 Tilni o'zgartirish"
+        'lang': "🌐 Tilni o'zgartirish",
+        'vip_menu_title': "💎 **VIP Obuna Bo'limi**\nTarifni tanlang:",
+        'card_info': (
+            "💎 Tanlangan tarif: **{tariff_name}**\n\n"
+            "💳 **Karta raqam:** `6262 5701 4806 4381`\n"
+            "👤 **Karta egasi:** Obidjonova M\n\n"
+            "📥 Pulni o'tkazgach, to'lov **chekini (rasmini)** shu botga yuboring. "
+            "Bot avtomatik ravishda VIP obunani ulab qo'yadi!"
+        ),
+        'receipt_success': "✅ Chekingiz qabul qilindi va bot avtomatik ravishda sizga VIP obunani ulab qo'ydi! 🎉",
+        'not_found': "❌ `{text}` kodli kino topilmadi.",
+        'vip_needed': "💎 Bu VIP kino! Uni ko'rish uchun VIP obuna kerak.",
+        'enter_code': "🔍 Kino kodini yuboring:",
+        'no_movies': "❌ Hozircha kinolar yo'q.",
+        'choose_lang': "Tilni tanlang:"
     },
     'ru': {
         'sub_success': "✅ Добро пожаловать! Главное меню:",
@@ -49,7 +63,21 @@ translations = {
         'recommend': "💡 Рекомендовать фильм",
         'upload': "📤 Добавить фильм",
         'vip': "💎 VIP Подписка",
-        'lang': "🌐 Язык"
+        'lang': "🌐 Язык",
+        'vip_menu_title': "💎 **Раздел VIP Подписки**\nВыберите тариф:",
+        'card_info': (
+            "💎 Выбранный тариф: **{tariff_name}**\n\n"
+            "💳 **Номер карты:** `6262 5701 4806 4381`\n"
+            "👤 **Владелец карты:** Obidjonova M\n\n"
+            "📥 После перевода средств отправьте **чек (скриншот)** оплаты в этот бот. "
+            "Бот автоматически подключит VIP подписку!"
+        ),
+        'receipt_success': "✅ Ваш чек принят, и бот автоматически подключил вам VIP подписку! 🎉",
+        'not_found': "❌ Фильм с кодом `{text}` не найден.",
+        'vip_needed': "💎 Это VIP фильм! Для просмотра нужна VIP подписка.",
+        'enter_code': "🔍 Отправьте код фильма:",
+        'no_movies': "❌ Потaм фильмов пока нет.",
+        'choose_lang': "Выберите язык:"
     },
     'en': {
         'sub_success': "✅ Welcome! Main menu:",
@@ -58,7 +86,21 @@ translations = {
         'recommend': "💡 Recommend movie",
         'upload': "📤 Upload movie",
         'vip': "💎 VIP Subscription",
-        'lang': "🌐 Language"
+        'lang': "🌐 Language",
+        'vip_menu_title': "💎 **VIP Subscription Section**\nChoose a tariff:",
+        'card_info': (
+            "💎 Selected tariff: **{tariff_name}**\n\n"
+            "💳 **Card number:** `6262 5701 4806 4381`\n"
+            "👤 **Card holder:** Obidjonova M\n\n"
+            "📥 After transferring the money, send the payment **receipt (screenshot)** to this bot. "
+            "The bot will automatically activate your VIP subscription!"
+        ),
+        'receipt_success': "✅ Your receipt has been accepted and the bot has automatically activated your VIP subscription! 🎉",
+        'not_found': "❌ Movie with code `{text}` not found.",
+        'vip_needed': "💎 This is a VIP movie! You need a VIP subscription to watch it.",
+        'enter_code': "🔍 Send the movie code:",
+        'no_movies': "❌ No movies available yet.",
+        'choose_lang': "Choose language:"
     }
 }
 
@@ -87,10 +129,12 @@ def get_main_menu(user_id):
         markup.add(types.KeyboardButton(t['vip']), types.KeyboardButton(t['lang']))
     return markup
 
-def get_movie_inline_markup():
+def get_movie_inline_markup(user_id):
+    lang = get_lang(user_id)
+    vip_btn_text = translations[lang]['vip']
     markup = types.InlineKeyboardMarkup()
     markup.add(
-        types.InlineKeyboardButton("💎 VIP Obuna", callback_data="buy_vip_menu"),
+        types.InlineKeyboardButton(vip_btn_text, callback_data="buy_vip_menu"),
         types.InlineKeyboardButton("📢 Reklama", url="https://t.me/")
     )
     return markup
@@ -108,15 +152,15 @@ def start_cmd(message):
     lang = get_lang(user_id)
     bot.send_message(message.chat.id, translations[lang]['sub_success'], reply_markup=get_main_menu(user_id))
 
-# VIP Menuni ochish funksiyasi (Ham buyruq, ham matn, ham inline uchun umumiy)
 def send_vip_menu(chat_id, user_id, message_id=None, is_edit=False):
     lang = get_lang(user_id)
+    t = translations[lang]
     markup = types.InlineKeyboardMarkup(row_width=1)
     tariffs = VIP_TARIFFS[lang]
     for key, data in tariffs.items():
         markup.add(types.InlineKeyboardButton(data[0], callback_data=f"select_tariff_{key}"))
     
-    text = "💎 **VIP Obuna Bo'limi**\nTarifni tanlang:"
+    text = t['vip_menu_title']
     if is_edit and message_id:
         try:
             bot.edit_message_text(text, chat_id, message_id, reply_markup=markup, parse_mode="Markdown")
@@ -132,21 +176,17 @@ def vip_menu_callback(call):
 @bot.callback_query_handler(func=lambda call: call.data.startswith("select_tariff_"))
 def select_tariff_callback(call):
     tariff_key = call.data.split("_")[2]
-    lang = get_lang(call.from_user.id)
+    user_id = call.from_user.id
+    lang = get_lang(user_id)
+    t = translations[lang]
     tariff_name = VIP_TARIFFS[lang][tariff_key][0]
     
-    text = (
-        f"💎 Tanlangan tarif: **{tariff_name}**\n\n"
-        "💳 **Karta raqam:** `6262 5701 4806 4381`\n"
-        "👤 **Karta egasi:** Obidjonova M\n\n"
-        "📥 Pulni o'tkazgach, to'lov **chekini (rasmini)** shu botga yuboring. "
-        "Bot avtomatik ravishda VIP obunani ulab qo'yadi!"
-    )
+    text = t['card_info'].format(tariff_name=tariff_name)
     try:
         bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode="Markdown")
     except Exception:
         bot.send_message(call.message.chat.id, text, parse_mode="Markdown")
-    user_db[call.from_user.id]['pending_tariff'] = tariff_key
+    user_db[user_id]['pending_tariff'] = tariff_key
 
 @bot.message_handler(content_types=['photo'])
 def handle_receipt(message):
@@ -154,8 +194,11 @@ def handle_receipt(message):
     if user_id == ADMIN_ID:
         return
     
+    lang = get_lang(user_id)
+    t = translations[lang]
+    
     user_db[user_id]['vip_expire'] = time.time() + (90 * 86400)
-    bot.reply_to(message, "✅ Chekingiz qabul qilindi va bot avtomatik ravishda sizga VIP obunani ulab qo'ydi! 🎉")
+    bot.reply_to(message, t['receipt_success'])
     
     markup = types.InlineKeyboardMarkup()
     markup.add(
@@ -224,7 +267,7 @@ def text_router(message):
         bot.reply_to(message, f"✅ VIP kino qo'shildi. Kodi: `{code}`", parse_mode="Markdown")
         return
 
-    # VIP Obuna tugmasi bosilganda menyuni ochish (Barcha tillardagilarni qamrab oladi)
+    # Barcha tillardagi VIP tugma variatsiyalarini ushlash
     if text == t['vip'] or text in ["💎 VIP Obuna", "💎 VIP Подписка", "💎 VIP Subscription"]:
         send_vip_menu(message.chat.id, user_id)
         return
@@ -236,7 +279,7 @@ def text_router(message):
             types.InlineKeyboardButton("Русский 🇷🇺", callback_data="set_ru"),
             types.InlineKeyboardButton("English 🇬🇧", callback_data="set_en")
         )
-        bot.send_message(message.chat.id, "Tilni tanlang:", reply_markup=markup)
+        bot.send_message(message.chat.id, t['choose_lang'], reply_markup=markup)
         return
 
     if text == t['upload']:
@@ -255,19 +298,19 @@ def text_router(message):
         return
 
     if text == t['search']:
-        bot.reply_to(message, "🔍 Kino kodini yuboring:")
+        bot.reply_to(message, t['enter_code'])
         return
 
     if text == t['random']:
         if not movies_db:
-            bot.reply_to(message, "❌ Hozircha kinolar yo'q.")
+            bot.reply_to(message, t['no_movies'])
             return
         code = random.choice(list(movies_db.keys()))
         m = movies_db[code]
         if m['type'] == 'vip' and not is_vip(user_id):
-            bot.reply_to(message, "💎 Bu VIP kino! Uni ko'rish uchun VIP obuna kerak.")
+            bot.reply_to(message, t['vip_needed'])
             return
-        bot.send_video(message.chat.id, m['file_id'], caption=f"🎲 Tasodifiy kino (Kod: `{code}`)", reply_markup=get_movie_inline_markup(), parse_mode="Markdown")
+        bot.send_video(message.chat.id, m['file_id'], caption=f"🎲 Tasodifiy kino (Kod: `{code}`)", reply_markup=get_movie_inline_markup(user_id), parse_mode="Markdown")
         return
 
     if text == t['recommend']:
@@ -277,11 +320,11 @@ def text_router(message):
     if text in movies_db:
         m = movies_db[text]
         if m['type'] == 'vip' and not is_vip(user_id):
-            bot.reply_to(message, "💎 Bu VIP kino! Uni ko'rish uchun VIP obuna kerak.")
+            bot.reply_to(message, t['vip_needed'])
             return
-        bot.send_video(message.chat.id, m['file_id'], caption=f"🎬 Siz so'ragan kino (Kod: `{text}`)", reply_markup=get_movie_inline_markup(), parse_mode="Markdown")
+        bot.send_video(message.chat.id, m['file_id'], caption=f"🎬 Siz so'ragan kino (Kod: `{text}`)", reply_markup=get_movie_inline_markup(user_id), parse_mode="Markdown")
     else:
-        bot.reply_to(message, f"❌ `{text}` kodli kino topilmadi.", parse_mode="Markdown")
+        bot.reply_to(message, t['not_found'].format(text=text), parse_mode="Markdown")
 
 @bot.message_handler(content_types=['video'])
 def handle_video_steps(message):
@@ -329,4 +372,4 @@ keep_alive()
 
 if __name__ == '__main__':
     bot.infinity_polling()
-        
+    
