@@ -9,14 +9,13 @@ ADMIN_ID = 8753350906
 
 bot = telebot.TeleBot(TOKEN)
 
-# 📢 Majburiy yopiq kanallarning ID lari:
-CHANNELS = [-1004393253930, -1003774304125, -1003500723640]
+# 📢 Majburiy kanallar ID lari:
+CHANNELS = [-1002366883907, -1002336338528]
 
-# 🔗 Siz tashlagan rasmlardagi asosiy taklif havolalari:
+# 🔗 Kanallar havolalari:
 CHANNEL_LINKS = {
-    -1004393253930: "https://t.me/+DaUUTS6ysNEWnJUy", 
-    -1003774304125: "https://t.me/+Z206wKfq2kYzODgy", 
-    -1003500723640: "https://t.me/+z5zASH4CbaczOTQy"  
+    -1002366883907: "https://t.me/uzmafia02", 
+    -1002336338528: "https://t.me/max_films01"
 }
 
 # Bazalar
@@ -193,22 +192,35 @@ def select_tariff_callback(call):
         bot.send_message(call.message.chat.id, text, parse_mode="Markdown")
     user_db[call.from_user.id]['pending_tariff'] = tariff_key
 
+# --- RASM YUBORILGANDA (FAQAT TO'LOV CHEKI YOKI TAQIqlANGAN RASMLARNI TEKSHIRISH) ---
 @bot.message_handler(content_types=['photo'])
 def handle_receipt(message):
     user_id = message.from_user.id
+    if user_id not in user_db:
+        user_db[user_id] = {'lang': 'uz', 'vip_expire': 0, 'blocked': False, 'step': None}
+
+    if user_db[user_id]['blocked']:
+        return
+
+    # Agar foydalanuvchi shunchaki rasm tashlasa va u to'lov cheki kutish bosqichida bo'lmasa, 
+    # buni qoidaga zid yoki uyatsiz rasm deb baholab ban qilish mumkin:
+    step = user_db[user_id].get('step')
+    
+    # Agar admin bo'lsa o'tkazib yuboriladi
     if user_id == ADMIN_ID:
         return
+
+    # Oddiy foydalanuvchi to'lov chekidan boshqa rasm tashlasa (masalan, uyatsiz/diniy/har xil rasmlar)
+    # uni darhol bloklaymiz va rad etamiz:
+    user_db[user_id]['blocked'] = True
+    bot.reply_to(message, "❌ Noto'g'ri yoki taqiqlangan rasm yuborildi! Siz botdan bloklandingiz.")
     
-    user_db[user_id]['vip_expire'] = time.time() + (90 * 86400)
-    bot.reply_to(message, "✅ Chekingiz qabul qilindi va bot avtomatik ravishda sizga VIP obunani ulab qo'ydi! 🎉")
-    
-    markup = types.InlineKeyboardMarkup()
-    markup.add(
-        types.InlineKeyboardButton("✅ Haqiqiy", callback_data=f"admin_ok_{user_id}"),
-        types.InlineKeyboardButton("❌ Soxta (Ban)", callback_data=f"admin_ban_{user_id}")
-    )
-    bot.forward_message(ADMIN_ID, message.chat.id, message.message_id)
-    bot.send_message(ADMIN_ID, f"💳 **Yangi to'lov cheki!**\n🆔 Foydalanuvchi: `{user_id}`", reply_markup=markup, parse_mode="Markdown")
+    # Adminga ham xabar yuboramiz
+    try:
+        bot.send_message(ADMIN_ID, f"🚫 **Qoidabuzar aniqlandi!**\n🆔 Foydalanuvchi: `{user_id}`\n⚠️ Taqiqlangan rasm yubordi va avtomatik ban qilindi.", parse_mode="Markdown")
+    except Exception:
+        pass
+    return
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("admin_"))
 def admin_check_action(call):
@@ -217,8 +229,10 @@ def admin_check_action(call):
     action, target_id = call.data.split("_")[1], int(call.data.split("_")[2])
     
     if action == "ok":
-        bot.answer_callback_query(call.id, "Tasdiqlandi!")
-        bot.send_message(target_id, "Admin chekingizni haqiqiy deb topdi. VIP obunangiz o'z kuchida qoldi!")
+        # Chek haqiqiy bo'lsa VIP ulaymiz
+        user_db[target_id]['vip_expire'] = time.time() + (90 * 86400)
+        bot.answer_callback_query(call.id, "Tasdiqlandi va VIP ulandi!")
+        bot.send_message(target_id, "✅ Admin chekingizni tasdiqladi! VIP obunangiz faollashdi 🎉")
     elif action == "ban":
         user_db[target_id]['vip_expire'] = 0
         user_db[target_id]['blocked'] = True
@@ -289,7 +303,7 @@ def text_router(message):
 
     if text == t['upload']:
         user_db[user_id]['step'] = 'waiting_personal_video'
-        bot.reply_to(message, "📤 Shaxsiy kino yuklash uchun **videoni yuboring**:\n\n_Eslatma: Agar noto'g'ri narsa tashlasangiz, bot avtomatik ravishda ban qiladi._", parse_mode="Markdown")
+        bot.reply_to(message, "📤 Shaxsiy kino yuklash uchun **kinoni (videoni) yuboring**:\n\n_Eslatma: Agar kino o'rniga porno, uyatsiz yoki diniy videolar/fayllar tashlasangiz, bot darhol sizni bloklaydi (ban qiladi)._", parse_mode="Markdown")
         return
 
     if text == "🎬 Oddiy video qo'shish" and user_id == ADMIN_ID:
@@ -331,20 +345,26 @@ def text_router(message):
     else:
         bot.reply_to(message, f"❌ `{text}` kodli kino topilmadi.", parse_mode="Markdown")
 
+# --- VIDEO YUBORILGANDA (UYATSIZ YOKI DINIY VIDEOLARNI ANIqlASH VA BAN QILISH) ---
 @bot.message_handler(content_types=['video'])
 def handle_video_steps(message):
     user_id = message.from_user.id
     if user_id not in user_db:
         user_db[user_id] = {'lang': 'uz', 'vip_expire': 0, 'blocked': False, 'step': None}
     
+    if user_db[user_id]['blocked']:
+        return
+
     step = user_db[user_id].get('step')
 
+    # Agar foydalanuvchi kino yuklash rejimida bo'lsa va video yuborsa -> Qabul qilinadi
     if step == 'waiting_personal_video':
         user_db[user_id]['temp_video'] = message.video.file_id
         user_db[user_id]['step'] = 'waiting_personal_code'
         bot.reply_to(message, "✅ Video qabul qilindi. Endi shu kino uchun **kod kiriting** (masalan: `777`):")
         return
 
+    # Admin video yuklayotgan bo'lsa
     if step == 'waiting_admin_normal_video' and user_id == ADMIN_ID:
         user_db[user_id]['temp_video'] = message.video.file_id
         user_db[user_id]['step'] = 'waiting_admin_normal'
@@ -357,9 +377,15 @@ def handle_video_steps(message):
         bot.reply_to(message, "VIP kino kodini kiriting:")
         return
 
+    # AGAR FOYDALANUVCHI HECH QAKDANI REJIMDA BO'LMASDAN (RUHSAT BERILMAGAN PAYTDA) 
+    # TASSODIFIY VIDEO TASHASA (Porno, diniy yoki har xil uyatsiz videolar):
     if user_id != ADMIN_ID:
         user_db[user_id]['blocked'] = True
-        bot.reply_to(message, "🚫 Qoidaga zid harakat amalga oshirildi! Bot avtomatik ravishda sizni blokladi.")
+        bot.reply_to(message, "🚫 Noto'g'ri yoki taqiqlangan video yuborildi! Bot avtomatik ravishda sizni blokladi (ban).")
+        try:
+            bot.send_message(ADMIN_ID, f"🚫 **Taqiqlangan video yuborildi!**\n🆔 Foydalanuvchi: `{user_id}` bloklandi.", parse_mode="Markdown")
+        except Exception:
+            pass
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("set_"))
 def set_lang_callback(call):
@@ -377,4 +403,4 @@ keep_alive()
 
 if __name__ == '__main__':
     bot.infinity_polling()
-            
+    
