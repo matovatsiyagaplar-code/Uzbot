@@ -1,6 +1,8 @@
 import telebot
-import os
 from telebot import types
+import random
+import time
+import threading
 from keep_alive import keep_alive
 
 TOKEN = "8816940858:AAEwDQ94ues00rcG1RVkNMPumQh7Xxgfowc"
@@ -8,54 +10,77 @@ ADMIN_ID = 8753350906
 
 bot = telebot.TeleBot(TOKEN)
 
-# Kanallar ro'yxati
+# Siz ko'rsatgan 3 ta majburiy obuna kanallari (ID yoki usernamesini shu yerga yozasiz)
 CHANNELS = [-1004393253930, -1003774304125, -1003500723640]
 
-user_languages = {}
-user_db = {}  
-movies_db = {} 
+# Bazalar
+user_db = {}   # {user_id: {'lang': 'uz', 'vip_expire': 0, 'blocked': False, 'step': None}}
+movies_db = {} # {code: {'file_id': '...', 'type': 'normal' or 'vip'}}
 
-FORBIDDEN_WORDS = [
-    "porno", "sex", "sins", "baxm", "jalab", "kino_18", "18+", "erotika", 
-    "islom", "namoz", "hadis", "quron", "alloh", "qur'on", "fatvo", "din"
-]
+# VIP Tariflar va Narxlar (Til bo'yicha)
+VIP_TARIFFS = {
+    'uz': {
+        '1': ("1 oy — 15,000 so'm", 30 * 86400),
+        '3': ("3 oy — 20,000 so'm", 90 * 86400),
+        '6': ("6 oy — 35,000 so'm", 180 * 86400),
+    },
+    'ru': {
+        '1': ("1 месяц — 200 руб", 30 * 86400),
+        '3': ("3 месяца — 300 руб", 90 * 86400),
+        '6': ("6 месяцев — 520 руб", 180 * 86400),
+    },
+    'en': {
+        '1': ("1 month — $12", 30 * 86400),
+        '3': ("3 months — $15", 90 * 86400),
+        '6': ("6 months — $22", 180 * 86400),
+    }
+}
 
-def add_user(user_id):
-    if not os.path.exists("users.txt"):
-        with open("users.txt", "w") as f:
-            f.write("")
-    with open("users.txt", "r") as f:
-        users = f.read().splitlines()
-    if str(user_id) not in users:
-        with open("users.txt", "a") as f:
-            f.write(str(user_id) + "\n")
-    if user_id not in user_db:
-        user_db[user_id] = {'vip': False, 'lang': 'uz', 'blocked': False}
+translations = {
+    'uz': {
+        'sub_error': "❌ Hamma kanallarga obuna bo'lmadingiz! Iltimos, obuna bo'lib qaytadan tekshiring.",
+        'sub_success': "✅ Obuna tasdiqlandi! Asosiy menyu:",
+        'search': "🔍 Qidirish",
+        'random': "🎲 Tasodifiy",
+        'recommend': "💡 Kino tavsiya qilish",
+        'upload': "📤 Shaxsiy kino yuklash",
+        'vip': "💎 VIP Obuna",
+        'lang': "🌐 Tilni o'zgartirish"
+    },
+    'ru': {
+        'sub_error': "❌ Вы подписались не на все каналы!",
+        'sub_success': "✅ Подписка подтверждена! Главное меню:",
+        'search': "🔍 Поиск",
+        'random': "🎲 Случайный",
+        'recommend': "💡 Рекомендовать фильм",
+        'upload': "📤 Загрузить фильм",
+        'vip': "💎 VIP Подписка",
+        'lang': "🌐 Язык"
+    },
+    'en': {
+        'sub_error': "❌ You have not subscribed to all channels!",
+        'sub_success': "✅ Subscription verified! Main menu:",
+        'search': "🔍 Search",
+        'random': "🎲 Random",
+        'recommend': "💡 Recommend movie",
+        'upload': "📤 Upload movie",
+        'vip': "💎 VIP Subscription",
+        'lang': "🌐 Language"
+    }
+}
 
-def is_blocked(user_id):
-    if user_id in user_db and user_db[user_id].get('blocked', False):
+def get_lang(user_id):
+    return user_db.get(user_id, {}).get('lang', 'uz')
+
+def is_vip(user_id):
+    if user_id == ADMIN_ID:
         return True
-    return False
-
-def check_content_safety(text):
-    if not text:
-        return True
-    text_lower = text.lower()
-    for word in FORBIDDEN_WORDS:
-        if word in text_lower:
-            return False 
-    return True
-
-def get_total_users():
-    if not os.path.exists("users.txt"):
-        return 0
-    with open("users.txt", "r") as f:
-        return len(f.read().splitlines())
-
-def get_total_videos():
-    return len(movies_db)
+    user = user_db.get(user_id, {})
+    return user.get('vip_expire', 0) > time.time()
 
 def check_subscription(user_id):
+    if user_id == ADMIN_ID:
+        return True
     for channel in CHANNELS:
         try:
             status = bot.get_chat_member(channel, user_id).status
@@ -65,164 +90,178 @@ def check_subscription(user_id):
             return False
     return True
 
-translations = {
-    'uz': {
-        'sub_error': "❌ Hamma kanallarga obuna bo'lmadingiz!",
-        'sub_success': "✅ Obuna tasdiqlandi! Asosiy menyu:",
-        'search_movie': "🔍 Qidiruv",
-        'random_movie': "🎲 Tasodifiy",
-        'recommend_movie': "💡 Kino tavsiya qilish",
-        'my_movies': "👤 Shaxsiy kino qo'shish",
-        'vip_menu': "💎 VIP video qo'shish",
-        'lang_btn': "🌐 Tilni o'zgartirish",
-        'vip_text': (
-            "💎 **VIP Obuna Bo'limi**\n\n"
-            "💳 **Karta raqam:** `6262 5701 4806 4381`\n"
-            "👤 **Karta egasi:** OBIDJONOVA MOXLAROYIM\n\n"
-            "Pulni o'tkazgach, to'lov **chekini (rasmini)** shu botga yuboring. "
-            "Bot chekingizni qabul qilib, avtomatik ravishda VIP obunani ulab qo'yadi!"
-        ),
-        'back': "🔙 Orqaga"
-    },
-    'ru': {
-        'sub_error': "❌ Вы подписались не на все каналы!",
-        'sub_success': "✅ Подписка подтверждена!",
-        'search_movie': "🔍 Поиск",
-        'random_movie': "🎲 Случайный",
-        'recommend_movie': "💡 Рекомендации",
-        'my_movies': "👤 Добавить кино",
-        'vip_menu': "💎 VIP видео",
-        'lang_btn': "🌐 Изменить язык",
-        'vip_text': "💎 **VIP Подписка**\n💳 `6262 5701 4806 4381` (OBIDJONOVA MOXLAROYIM)\nChekni yuboring va VIP avtomat ulanadi!",
-        'back': "🔙 Назад"
-    },
-    'en': {
-        'sub_error': "❌ You have not subscribed to all channels!",
-        'sub_success': "✅ Subscription verified!",
-        'search_movie': "🔍 Search",
-        'random_movie': "🎲 Random",
-        'recommend_movie': "💡 Recommendations",
-        'my_movies': "👤 Add movie",
-        'vip_menu': "💎 VIP video",
-        'lang_btn': "🌐 Change Language",
-        'vip_text': "💎 **VIP Subscription**\n💳 `6262 5701 4806 4381` (OBIDJONOVA MOXLAROYIM)\nSend receipt to get instant VIP!",
-        'back': "🔙 Back"
-    }
-}
-
-def get_lang(user_id):
-    if user_id in user_db:
-        return user_db[user_id]['lang']
-    return user_languages.get(user_id, 'uz')
-
-def main_menu_markup(lang):
+def get_main_menu(user_id):
+    lang = get_lang(user_id)
     t = translations[lang]
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    
+    if user_id == ADMIN_ID:
+        markup.add(types.KeyboardButton(t['search']), types.KeyboardButton(t['random']))
+        markup.add(types.KeyboardButton(t['recommend']), types.KeyboardButton(t['upload']))
+        markup.add(types.KeyboardButton("🎬 Oddiy video qo'shish"), types.KeyboardButton("💎 VIP video qo'shish"))
+        markup.add(types.KeyboardButton(t['vip']), types.KeyboardButton(t['lang']))
+    else:
+        markup.add(types.KeyboardButton(t['search']), types.KeyboardButton(t['random']))
+        markup.add(types.KeyboardButton(t['recommend']), types.KeyboardButton(t['upload']))
+        markup.add(types.KeyboardButton(t['vip']), types.KeyboardButton(t['lang']))
+    return markup
+
+def get_movie_inline_markup():
+    markup = types.InlineKeyboardMarkup()
     markup.add(
-        types.KeyboardButton(t['search_movie']),
-        types.KeyboardButton(t['random_movie'])
+        types.InlineKeyboardButton("💎 VIP Obuna", callback_data="buy_vip_menu"),
+        types.InlineKeyboardButton("📢 Reklama", url="https://t.me/")
     )
-    markup.add(
-        types.KeyboardButton(t['recommend_movie']),
-        types.KeyboardButton(t['my_movies'])
-    )
-    markup.add(types.KeyboardButton(t['vip_menu']))
-    markup.add(types.KeyboardButton(t['lang_btn']))
     return markup
 
 @bot.message_handler(commands=['start'])
-def start_command(message):
+def start_cmd(message):
     user_id = message.from_user.id
-    add_user(user_id)
+    if user_id not in user_db:
+        user_db[user_id] = {'lang': 'uz', 'vip_expire': 0, 'blocked': False, 'step': None}
     
-    if is_blocked(user_id):
-        bot.send_message(message.chat.id, "🚫 Siz botdan foydalanishdan bloklangansiz!")
+    if user_db[user_id]['blocked']:
+        bot.send_message(message.chat.id, "❌ Siz botdan foydalanishdan bloklangansiz.")
         return
 
     lang = get_lang(user_id)
-    if check_subscription(user_id):
-        bot.send_message(message.chat.id, translations[lang]['sub_success'], reply_markup=main_menu_markup(lang))
-    else:
-        welcome_intro = (
-            "✨ Assalomu alaykum! Botimizga xush kelibsiz.\n"
-            "Kinolarni topish uchun quyidagi kanallarga obuna bo'ling:"
-        )
+
+    if not check_subscription(user_id):
         markup = types.InlineKeyboardMarkup(row_width=1)
         for i, ch in enumerate(CHANNELS, 1):
-            markup.add(types.InlineKeyboardButton(f"Obuna bo'lish {i}", url=f"https://t.me/c/{str(ch).replace('-100','')}/1"))
-        markup.add(types.InlineKeyboardButton("🔄 Obunani tekshirish", callback_data="check_sub"))
-        markup.add(types.InlineKeyboardButton("🌐 Tilni tanlash", callback_data="lang_menu"))
-        bot.send_message(message.chat.id, welcome_intro, reply_markup=markup)
-
-@bot.callback_query_handler(func=lambda call: call.data == "lang_menu")
-def language_menu(call):
-    markup = types.InlineKeyboardMarkup(row_width=3)
-    markup.add(
-        types.InlineKeyboardButton("O'zbekcha 🇺🇿", callback_data="set_uz"),
-        types.InlineKeyboardButton("Русский 🇷🇺", callback_data="set_ru"),
-        types.InlineKeyboardButton("English 🇬🇧", callback_data="set_en")
-    )
-    bot.edit_message_text("Tilni tanlang:", call.message.chat.id, call.message.message_id, reply_markup=markup)
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith("set_"))
-def set_lang_handler(call):
-    user_id = call.from_user.id
-    if is_blocked(user_id):
+            markup.add(types.InlineKeyboardButton(f"{i}-Kanalga obuna bo'lish", url=f"https://t.me/c/{str(ch).replace('-100','')}/1"))
+        markup.add(types.InlineKeyboardButton("🔄 Tekshirish va Premium obuna", callback_data="check_sub"))
+        bot.send_message(message.chat.id, "✨ Botdan foydalanish uchun quyidagi kanallarga obuna bo'ling:", reply_markup=markup)
         return
-    lang = call.data.split("_")[1]
-    user_languages[user_id] = lang
-    if user_id in user_db:
-        user_db[user_id]['lang'] = lang
-    bot.answer_callback_query(call.id, "Til o'zgartirildi!")
-    
-    if check_subscription(user_id):
-        bot.delete_message(call.message.chat.id, call.message.message_id)
-        bot.send_message(call.message.chat.id, translations[lang]['sub_success'], reply_markup=main_menu_markup(lang))
-    else:
-        bot.answer_callback_query(call.id, translations[lang]['sub_error'], show_alert=True)
+
+    bot.send_message(message.chat.id, translations[lang]['sub_success'], reply_markup=get_main_menu(user_id))
 
 @bot.callback_query_handler(func=lambda call: call.data == "check_sub")
-def check_sub_handler(call):
+def check_sub_callback(call):
     user_id = call.from_user.id
-    if is_blocked(user_id):
-        return
     lang = get_lang(user_id)
-    
     if check_subscription(user_id):
         bot.delete_message(call.message.chat.id, call.message.message_id)
-        bot.send_message(call.message.chat.id, translations[lang]['sub_success'], reply_markup=main_menu_markup(lang))
+        bot.send_message(call.message.chat.id, translations[lang]['sub_success'], reply_markup=get_main_menu(user_id))
     else:
         bot.answer_callback_query(call.id, translations[lang]['sub_error'], show_alert=True)
 
-# Tugmalar bosilganda ishlaydigan qism
-@bot.message_handler(func=lambda message: True)
-def handle_text_messages(message):
+@bot.callback_query_handler(func=lambda call: call.data == "buy_vip_menu" or call.data.startswith("vip_lang_"))
+def vip_menu_handler(call):
+    user_id = call.from_user.id
+    lang = get_lang(user_id)
+    
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    tariffs = VIP_TARIFFS[lang]
+    for key, data in tariffs.items():
+        markup.add(types.InlineKeyboardButton(data[0], callback_data=f"select_tariff_{key}"))
+    
+    text = f"💎 **VIP Obuna Bo'limi**\nTarifni tanlang:"
+    if call.data == "buy_vip_menu":
+        bot.send_message(call.message.chat.id, text, reply_markup=markup, parse_mode="Markdown")
+    else:
+        bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode="Markdown")
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("select_tariff_"))
+def select_tariff_callback(call):
+    tariff_key = call.data.split("_")[2]
+    lang = get_lang(call.from_user.id)
+    tariff_name = VIP_TARIFFS[lang][tariff_key][0]
+    
+    text = (
+        f"💎 Tanlangan tarif: **{tariff_name}**\n\n"
+        "💳 **Karta raqam:** `6262 5701 4806 4381`\n"
+        "👤 **Karta egasi:** Obidjonova M\n\n"
+        "📥 Pulni o'tkazgach, to'lov **chekini (rasmini)** shu botga yuboring. "
+        "Bot avtomatik ravishda VIP obunani ulab qo'yadi!"
+    )
+    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode="Markdown")
+    user_db[call.from_user.id]['pending_tariff'] = tariff_key
+
+@bot.message_handler(content_types=['photo'])
+def handle_receipt(message):
     user_id = message.from_user.id
-    if is_blocked(user_id):
-        bot.reply_to(message, "🚫 Siz botdan foydalanishdan bloklangansiz!")
+    if user_id == ADMIN_ID:
+        return
+    
+    user_db[user_id]['vip_expire'] = time.time() + (90 * 86400) # Avtomat vaqt ulandi
+    bot.reply_to(message, "✅ Chekingiz qabul qilindi va bot avtomatik ravishda sizga VIP obunani ulab qo'ydi! 🎉")
+    
+    markup = types.InlineKeyboardMarkup()
+    markup.add(
+        types.InlineKeyboardButton("✅ Haqiqiy", callback_data=f"admin_ok_{user_id}"),
+        types.InlineKeyboardButton("❌ Soxta (Ban)", callback_data=f"admin_ban_{user_id}")
+    )
+    bot.forward_message(ADMIN_ID, message.chat.id, message.message_id)
+    bot.send_message(ADMIN_ID, f"💳 **Yangi to'lov cheki!**\n🆔 Foydalanuvchi: `{user_id}`", reply_markup=markup, parse_mode="Markdown")
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("admin_"))
+def admin_check_action(call):
+    if call.from_user.id != ADMIN_ID:
+        return
+    action, target_id = call.data.split("_")[1], int(call.data.split("_")[2])
+    
+    if action == "ok":
+        bot.answer_callback_query(call.id, "Tasdiqlandi!")
+        bot.send_message(target_id, "Admin chekingizni haqiqiy deb topdi. VIP obunangiz o'z kuchida qoldi!")
+    elif action == "ban":
+        user_db[target_id]['vip_expire'] = 0
+        user_db[target_id]['blocked'] = True
+        bot.answer_callback_query(call.id, "Chek soxta topildi va foydalanuvchi bloklandi!")
+        bot.send_message(target_id, "❌ Chekingiz soxta deb topildi va siz botdan bloklandingiz.")
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+
+@bot.message_handler(func=lambda message: True)
+def text_router(message):
+    user_id = message.from_user.id
+    if user_id not in user_db:
+        user_db[user_id] = {'lang': 'uz', 'vip_expire': 0, 'blocked': False, 'step': None}
+    
+    if user_db[user_id]['blocked']:
+        bot.send_message(message.chat.id, "❌ Siz bloklangansiz.")
         return
 
     lang = get_lang(user_id)
+    text = message.text.strip()
     t = translations[lang]
-    text = message.text
 
-    if not check_content_safety(text):
-        user_db[user_id]['blocked'] = True
-        bot.reply_to(message, "❌ Taqiqlangan kontent yuborganingiz uchun botdan **bloklandingiz!**")
-        bot.send_message(ADMIN_ID, f"⚠️ **Qoidabuzar bloklandi!**\n🆔 ID: `{user_id}`")
+    if not check_subscription(user_id):
+        start_cmd(message)
         return
 
-    if text in [translations['uz']['vip_menu'], translations['ru']['vip_menu'], translations['en']['vip_menu']]:
-        bot.send_message(message.chat.id, t['vip_text'], parse_mode="Markdown")
-    elif text in [translations['uz']['search_movie'], translations['ru']['search_movie'], translations['en']['search_movie']]:
-        bot.reply_to(message, "🔍 Qidirmoqchi bo'lgan kino nomini yuboring:")
-    elif text in [translations['uz']['random_movie'], translations['ru']['random_movie'], translations['en']['random_movie']]:
-        bot.reply_to(message, "🎲 Tasodifiy kino qidirilmoqda...")
-    elif text in [translations['uz']['recommend_movie'], translations['ru']['recommend_movie'], translations['en']['recommend_movie']]:
-        bot.reply_to(message, "💡 Tavsiya qilinadigan kinolar tez orada qo'shiladi.")
-    elif text in [translations['uz']['my_movies'], translations['ru']['my_movies'], translations['en']['my_movies']]:
-        bot.reply_to(message, "👤 Kino qo'shish uchun nomini yoki videoni yuboring:")
-    elif text in [translations['uz']['lang_btn'], translations['ru']['lang_btn'], translations['en']['lang_btn']]:
+    # Qadamlar (Steps)
+    step = user_db[user_id].get('step')
+
+    if step == 'waiting_personal_code':
+        code = text
+        video_info = user_db[user_id].get('temp_video')
+        movies_db[code] = {'file_id': video_info, 'type': 'normal'}
+        user_db[user_id]['step'] = None
+        bot.reply_to(message, f"✅ Shaxsiy kino bazaga muvaffaqiyatli qo'shildi! Kodi: `{code}`", parse_mode="Markdown")
+        return
+
+    if step == 'waiting_admin_normal':
+        code = text
+        video_info = user_db[user_id].get('temp_video')
+        movies_db[code] = {'file_id': video_info, 'type': 'normal'}
+        user_db[user_id]['step'] = None
+        bot.reply_to(message, f"✅ Oddiy kino qo'shildi. Kodi: `{code}`", parse_mode="Markdown")
+        return
+
+    if step == 'waiting_admin_vip':
+        code = text
+        video_info = user_db[user_id].get('temp_video')
+        movies_db[code] = {'file_id': video_info, 'type': 'vip'}
+        user_db[user_id]['step'] = None
+        bot.reply_to(message, f"✅ VIP kino qo'shildi. Kodi: `{code}`", parse_mode="Markdown")
+        return
+
+    # Menyular
+    if text == t['vip']:
+        vip_menu_handler(message)
+        return
+
+    if text == t['lang']:
         markup = types.InlineKeyboardMarkup(row_width=3)
         markup.add(
             types.InlineKeyboardButton("O'zbekcha 🇺🇿", callback_data="set_uz"),
@@ -230,50 +269,94 @@ def handle_text_messages(message):
             types.InlineKeyboardButton("English 🇬🇧", callback_data="set_en")
         )
         bot.send_message(message.chat.id, "Tilni tanlang:", reply_markup=markup)
-    elif message.text == "/panel" and user_id == ADMIN_ID:
-        bot.send_message(message.chat.id, f"👑 Admin Panel\n👥 Foydalanuvchilar: {get_total_users()}\n🎬 Kinolar: {get_total_videos()}")
-    else:
-        bot.reply_to(message, "✅ Xabaringiz qabul qilindi!")
+        return
 
-@bot.message_handler(content_types=['photo'])
-def handle_receipt(message):
+    if text == t['upload']:
+        user_db[user_id]['step'] = 'waiting_personal_video'
+        bot.reply_to(message, "📤 Shaxsiy kino yuklash uchun **videni yuboring**:\n\n_Eslatma: Agar noto'g'ri narsa tashlasangiz, bot avtomatik ravishda ban qiladi._", parse_mode="Markdown")
+        return
+
+    if text == "🎬 Oddiy video qo'shish" and user_id == ADMIN_ID:
+        user_db[user_id]['step'] = 'waiting_admin_normal_video'
+        bot.reply_to(message, "Admin: Oddiy videoni yuboring:")
+        return
+
+    if text == "💎 VIP video qo'shish" and user_id == ADMIN_ID:
+        user_db[user_id]['step'] = 'waiting_admin_vip_video'
+        bot.reply_to(message, "Admin: VIP videoni yuboring:")
+        return
+
+    if text == t['search']:
+        bot.reply_to(message, "🔍 Kino kodini yuboring:")
+        return
+
+    if text == t['random']:
+        if not movies_db:
+            bot.reply_to(message, "❌ Hozircha kinolar yo'q.")
+            return
+        code = random.choice(list(movies_db.keys()))
+        m = movies_db[code]
+        if m['type'] == 'vip' and not is_vip(user_id):
+            bot.reply_to(message, "💎 Bu VIP kino! Uni ko'rish uchun VIP obuna kerak.")
+            return
+        bot.send_video(message.chat.id, m['file_id'], caption=f"🎲 Tasodifiy kino (Kod: `{code}`)", reply_markup=get_movie_inline_markup(), parse_mode="Markdown")
+        return
+
+    if text == t['recommend']:
+        bot.reply_to(message, "💡 Tavsiya qilinadigan kinolar tez orada qo'shiladi.")
+        return
+
+    # Kod bo'yicha qidirish
+    if text in movies_db:
+        m = movies_db[text]
+        if m['type'] == 'vip' and not is_vip(user_id):
+            bot.reply_to(message, "💎 Bu VIP kino! Uni ko'rish uchun VIP obuna kerak.")
+            return
+        bot.send_video(message.chat.id, m['file_id'], caption=f"🎬 Siz so'ragan kino (Kod: `{text}`)", reply_markup=get_movie_inline_markup(), parse_mode="Markdown")
+    else:
+        bot.reply_to(message, f"❌ `{text}` kodli kino topilmadi.", parse_mode="Markdown")
+
+@bot.message_handler(content_types=['video'])
+def handle_video_steps(message):
     user_id = message.from_user.id
-    if user_id == ADMIN_ID:
-        return
-    if is_blocked(user_id):
-        return
-
     if user_id not in user_db:
-        user_db[user_id] = {'vip': True, 'lang': 'uz', 'blocked': False}
-    else:
-        user_db[user_id]['vip'] = True
-
-    bot.reply_to(message, "🎉 Chekingiz qabul qilindi va sizga **AVTOMATIK ravishda VIP Obuna** ulandi!")
-
-    caption = (
-        f"💳 **Yangi VIP Chek Keldi! (Avtomat ulandi)**\n\n"
-        f"👤 Foydalanuvchi: {message.from_user.first_name}\n"
-        f"🆔 ID: `{user_id}`\n\n"
-        f"Soxta bo'lsa VIP ni bekor qilish:"
-    )
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("❌ Soxta (VIP ni bekor qilish)", callback_data=f"revoke_vip_{user_id}"))
-    
-    bot.forward_message(ADMIN_ID, message.chat.id, message.message_id)
-    bot.send_message(ADMIN_ID, caption, reply_markup=markup, parse_mode="Markdown")
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith("revoke_vip_"))
-def revoke_vip_handler(call):
-    if call.from_user.id != ADMIN_ID:
         return
-    target_user_id = int(call.data.split("_")[2])
-    if target_user_id in user_db:
-        user_db[target_user_id]['vip'] = False
-    bot.send_message(target_user_id, "❌ Kechirasiz, admin chekingiz soxta ekanini aniqladi va VIP obunangiz bekor qilindi.")
-    bot.answer_callback_query(call.id, "VIP olib tashlandi!")
+    step = user_db[user_id].get('step')
+
+    if step == 'waiting_personal_video':
+        user_db[user_id]['temp_video'] = message.video.file_id
+        user_db[user_id]['step'] = 'waiting_personal_code'
+        bot.reply_to(message, "✅ Video qabul qilindi. Endi shu kino uchun **kod kiriting** (masalan: `777`):")
+        return
+
+    if step == 'waiting_admin_normal_video' and user_id == ADMIN_ID:
+        user_db[user_id]['temp_video'] = message.video.file_id
+        user_db[user_id]['step'] = 'waiting_admin_normal'
+        bot.reply_to(message, "Kino kodini kiriting:")
+        return
+
+    if step == 'waiting_admin_vip_video' and user_id == ADMIN_ID:
+        user_db[user_id]['temp_video'] = message.video.file_id
+        user_db[user_id]['step'] = 'waiting_admin_vip'
+        bot.reply_to(message, "VIP kino kodini kiriting:")
+        return
+
+    # Agar foydalanuvchi ruxsatsiz video tashlasa (qoidani buzsa)
+    if user_id != ADMIN_ID:
+        user_db[user_id]['blocked'] = True
+        bot.reply_to(message, "🚫 Qoidaga zid harakat amalga oshirildi! Bot avtomatik ravishda sizni blokladi.")
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("set_"))
+def set_lang_callback(call):
+    user_id = call.from_user.id
+    lang = call.data.split("_")[1]
+    user_db[user_id]['lang'] = lang
+    bot.answer_callback_query(call.id, "Til o'zgartirildi!")
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    bot.send_message(call.message.chat.id, translations[lang]['sub_success'], reply_markup=get_main_menu(user_id))
 
 keep_alive()
 
 if __name__ == '__main__':
     bot.infinity_polling()
-    
+        
