@@ -9,15 +9,14 @@ ADMIN_ID = 8753350906
 
 bot = telebot.TeleBot(TOKEN)
 
-# Siz ko'rsatgan 3 ta majburiy yopiq kanal ID lari:
+# 📢 Majburiy yopiq kanallarning ID lari:
 CHANNELS = [-1004393253930, -1003774304125, -1003500723640]
 
-# Kanallarga qo'shilish uchun taklif havolalari (Invite links)
-# O'zingizning kanal havolalaringizni shu yerga yozib qo'ying:
+# 🔗 Har bir kanal uchun alohida va doimiy taklif havolalari (Invite links):
 CHANNEL_LINKS = {
-    -1004393253930: "https://t.me/+DaUUTS6ysNEWnJUy", # 1-kanal havolasi
-    -1003774304125: "https://t.me/+DaUUTS6ysNEWnJUy", # 2-kanal havolasi (o'zgartirishingiz mumkin)
-    -1003500723640: "https://t.me/+DaUUTS6ysNEWnJUy"  # 3-kanal havolasi (o'zgartirishingiz mumkin)
+    -1004393253930: "https://t.me/+Sizning1KanalHavolangiz", # 1-kanal havolasini shu yerga yozing
+    -1003774304125: "https://t.me/+Sizning2KanalHavolangiz", # 2-kanal havolasini shu yerga yozing
+    -1003500723640: "https://t.me/+Sizning3KanalHavolangiz"  # 3-kanal havolasini shu yerga yozing
 }
 
 # Bazalar
@@ -27,9 +26,9 @@ movies_db = {} # {code: {'file_id': '...', 'type': 'normal' or 'vip'}}
 # VIP Tariflar va Narxlar (Til bo'yicha)
 VIP_TARIFFS = {
     'uz': {
-        '1': ("1 oy — 15,000 so'm", 30 * 86400),
-        '3': ("3 oy — 20,000 so'm", 90 * 86400),
-        '6': ("6 oy — 35,000 so'm", 180 * 86400),
+        '1': ("1 oy — 15,000 so'м", 30 * 86400),
+        '3': ("3 oy — 20,000 so'м", 90 * 86400),
+        '6': ("6 oy — 35,000 so'м", 180 * 86400),
     },
     'ru': {
         '1': ("1 месяц — 200 руб", 30 * 86400),
@@ -135,6 +134,7 @@ def start_cmd(message):
 
     if not check_subscription(user_id):
         markup = types.InlineKeyboardMarkup(row_width=1)
+        # Har bir kanal uchun o'zining havolasini chiqarish
         for i, ch in enumerate(CHANNELS, 1):
             link = CHANNEL_LINKS.get(ch, "https://t.me/")
             markup.add(types.InlineKeyboardButton(f"{i}-Kanalga obuna bo'lish", url=link))
@@ -379,3 +379,4 @@ keep_alive()
 
 if __name__ == '__main__':
     bot.infinity_polling()
+                                  
