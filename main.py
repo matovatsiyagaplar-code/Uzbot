@@ -76,7 +76,7 @@ translations = {
         'not_found': "❌ Фильм с кодом `{text}` не найден.",
         'vip_needed': "💎 Это VIP фильм! Для просмотра нужна VIP подписка.",
         'enter_code': "🔍 Отправьте код фильма:",
-        'no_movies': "❌ Потaм фильмов пока нет.",
+        'no_movies': "❌ Фильмов пока нет.",
         'choose_lang': "Выберите язык:"
     },
     'en': {
@@ -135,7 +135,7 @@ def get_movie_inline_markup(user_id):
     markup = types.InlineKeyboardMarkup()
     markup.add(
         types.InlineKeyboardButton(vip_btn_text, callback_data="buy_vip_menu"),
-        types.InlineKeyboardButton("📢 Reklama", url="https://t.me/")
+        types.InlineKeyboardButton("📢 Reklama", url="https://t.me/reklamuchun1")
     )
     return markup
 
@@ -237,10 +237,15 @@ def text_router(message):
         bot.send_message(message.chat.id, "❌ Siz bloklangansiz.")
         return
 
-    lang = get_lang(user_id)
     text = message.text.strip()
-    t = translations[lang]
+    
+    # VIP tugmani har qanday tilda zudlik bilan tutib olish
+    if "VIP" in text:
+        send_vip_menu(message.chat.id, user_id)
+        return
 
+    lang = get_lang(user_id)
+    t = translations[lang]
     step = user_db[user_id].get('step')
 
     if step == 'waiting_personal_code':
@@ -265,11 +270,6 @@ def text_router(message):
         movies_db[code] = {'file_id': video_info, 'type': 'vip'}
         user_db[user_id]['step'] = None
         bot.reply_to(message, f"✅ VIP kino qo'shildi. Kodi: `{code}`", parse_mode="Markdown")
-        return
-
-    # Barcha tillardagi VIP tugma variatsiyalarini ushlash
-    if text == t['vip'] or text in ["💎 VIP Obuna", "💎 VIP Подписка", "💎 VIP Subscription"]:
-        send_vip_menu(message.chat.id, user_id)
         return
 
     if text == t['lang']:
@@ -372,3 +372,4 @@ keep_alive()
 
 if __name__ == '__main__':
     bot.infinity_polling()
+    
