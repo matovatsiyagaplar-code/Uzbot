@@ -10,7 +10,7 @@ ADMIN_ID = 8753350906
 bot = telebot.TeleBot(TOKEN)
 
 # Bazalar
-user_db = {}   # {user_id: {'lang': 'uz', 'vip_expire': 0, 'blocked': False, 'step': None}}
+user_db = {}   # {user_id: {'lang': 'uz', 'vip_expire': 0, 'blocked': False, 'step': None, 'temp_video': None}}
 movies_db = {} # {code: {'file_id': '...', 'type': 'normal' or 'vip'}}
 
 # VIP Tariflar va Narxlar (Til bo'yicha)
@@ -239,13 +239,14 @@ def text_router(message):
 
     text = message.text.strip()
     
-    # VIP tugmani har qanday tilda zudlik bilan tutib olish
-    if "VIP" in text:
+    # VIP obuna tugmasi barcha tillarda aniq tekshiriladi
+    lang = get_lang(user_id)
+    t = translations[lang]
+    
+    if text in [translations['uz']['vip'], translations['ru']['vip'], translations['en']['vip']]:
         send_vip_menu(message.chat.id, user_id)
         return
 
-    lang = get_lang(user_id)
-    t = translations[lang]
     step = user_db[user_id].get('step')
 
     if step == 'waiting_personal_code':
